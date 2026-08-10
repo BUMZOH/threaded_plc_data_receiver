@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import threading
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -26,7 +25,7 @@ BASE_DIRECTORY = Path(__file__).resolve().parent
 @dataclass(frozen=True)
 class MotorConfig:
     """モータごとのPLCデバイスと保存先設定。"""
-
+    
     name: str
     request_device: str
     completion_device: str
@@ -37,22 +36,22 @@ class MotorConfig:
 MOTOR_CONFIGS = (
     MotorConfig(
         name="motor1",
-        request_device="B10.0",
-        completion_device="B20.0",
+        request_device="B100",
+        completion_device="B200",
         data_start_device="EM30000",
         output_directory=BASE_DIRECTORY / "motor1",
     ),
     MotorConfig(
         name="motor2",
-        request_device="B10.1",
-        completion_device="B20.1",
+        request_device="B101",
+        completion_device="B201",
         data_start_device="EM32000",
         output_directory=BASE_DIRECTORY / "motor2",
     ),
     MotorConfig(
         name="motor3",
-        request_device="B10.2",
-        completion_device="B20.2",
+        request_device="B102",
+        completion_device="B202",
         data_start_device="EM34000",
         output_directory=BASE_DIRECTORY / "motor3",
     ),
@@ -65,22 +64,15 @@ class MotorReceiver:
     def __init__(self, plc_ip_address: str) -> None:
         self.plc_ip_address = plc_ip_address
 
-        # 最大3台分だけを並列実行する固定サイズのスレッドプール。
-        self.executor = ThreadPoolExecutor(
-            max_workers=len(MOTOR_CONFIGS),
-            thread_name_prefix="motor-receiver",
-        )
-
         # 要求信号がOFFへ戻るまで、同じ要求を再受付しないための状態。
         self.request_latched = {
             config.name: False
             for config in MOTOR_CONFIGS
         }
 
-        # モータごとの受信タスクを保持する。
-        # Futureが未設定または完了済みなら、次のタスクを開始できる。
-        self.futures: dict[str, Future[None] | None] = {
-            config.name: None
+        # モータごとに受信処理が実行中かを表す。
+        self.is_receiving = {
+            config.name: False
             for config in MOTOR_CONFIGS
         }
 
@@ -91,34 +83,21 @@ class MotorReceiver:
         self._create_output_directories()
         self._print_startup_message()
 
-        try:
-            while True:
-                try:
-                    for config in MOTOR_CONFIGS:
-                        self._check_request(config)
+        while True:
+            try:
+                for config in MOTOR_CONFIGS:
+                    self._check_request(config)
 
-                except (
-                    ConnectionError,
-                    OSError,
-                    TimeoutError,
-                    RuntimeError,
-                ) as error:
-                    print(f"[{current_time()}] PLC通信エラー: {error}")
+            except (ConnectionError, OSError, TimeoutError, RuntimeError) as error:
+                print(f"[{current_time()}] PLC通信エラー: {error}")
 
-                except ValueError as error:
-                    print(f"[{current_time()}] PLCデータエラー: {error}")
+            except ValueError as error:
+                print(f"[{current_time()}] PLCデータエラー: {error}")
 
-                time.sleep(POLL_INTERVAL_SECONDS)
-
-        finally:
-            print(
-                f"[{current_time()}] "
-                "実行中の受信処理が完了するまで待機します。"
-            )
-            self.executor.shutdown(wait=True, cancel_futures=True)
+            time.sleep(POLL_INTERVAL_SECONDS)
 
     def _check_request(self, config: MotorConfig) -> None:
-        """1台分の要求を確認し、立上り時に受信タスクを登録する。"""
+        """1台分の受信要求を確認し、立上り時にサブスレッドを開始する。"""
         request_is_on = read_bit_device(
             self.plc_ip_address,
             config.request_device,
@@ -132,21 +111,24 @@ class MotorReceiver:
             if self.request_latched[config.name]:
                 return
 
-            future = self.futures[config.name]
-            if future is not None and not future.done():
+            if self.is_receiving[config.name]:
                 return
 
             self.request_latched[config.name] = True
+            self.is_receiving[config.name] = True
 
-            print(
-                f"[{current_time()}] {config.name}: "
-                f"受信要求ON ({config.request_device})"
-            )
+        print(
+            f"[{current_time()}] {config.name}: "
+            f"受信要求ON ({config.request_device})"
+        )
 
-            self.futures[config.name] = self.executor.submit(
-                self._receive_and_save,
-                config,
-            )
+        thread = threading.Thread(
+            target=self._receive_and_save,
+            args=(config,),
+            name=f"{config.name}-receiver",
+            daemon=True,
+        )
+        thread.start()
 
     def _receive_and_save(self, config: MotorConfig) -> None:
         """電流値を受信・保存し、PLCへ受信完了を通知する。"""
@@ -178,14 +160,12 @@ class MotorReceiver:
                 f"    完了通知ON: {config.completion_device}"
             )
 
-        except (
-            ConnectionError,
-            OSError,
-            TimeoutError,
-            RuntimeError,
-            ValueError,
-        ) as error:
+        except (ConnectionError, OSError, TimeoutError, RuntimeError, ValueError) as error:
             print(f"[{current_time()}] {config.name}: 受信処理エラー: {error}")
+
+        finally:
+            with self.state_lock:
+                self.is_receiving[config.name] = False
 
     @staticmethod
     def _create_output_directories() -> None:
@@ -199,7 +179,6 @@ class MotorReceiver:
         print(f"PLC IPアドレス : {self.plc_ip_address}")
         print(f"監視周期         : {POLL_INTERVAL_SECONDS} 秒")
         print(f"受信点数         : 各モータ {DATA_POINT_COUNT} 点（32ビット）")
-        print(f"最大並列数       : {len(MOTOR_CONFIGS)}")
         print("停止方法         : Ctrl + C")
         print("-" * 72)
 
@@ -216,7 +195,7 @@ class MotorReceiver:
 
 def read_bit_device(plc_ip_address: str, device: str) -> bool:
     """PLCのビットデバイスを読み、ON/OFFをboolで返す。"""
-    response = kv_com.read_device_u(plc_ip_address, device)
+    response = kv_com.read_device_b(plc_ip_address, device)
 
     if response in ("E0", "E1", "E2", "E3", "E4", "E5", "E6"):
         raise RuntimeError(
@@ -247,7 +226,7 @@ def write_bit_device(
 ) -> None:
     """PLCのビットデバイスへON/OFFを書き込む。"""
     value = 1 if is_on else 0
-    response = kv_com.write_device_u(plc_ip_address, device, value)
+    response = kv_com.write_device_b(plc_ip_address, device, value)
 
     if response != "OK":
         raise RuntimeError(
@@ -296,7 +275,7 @@ def main() -> None:
     try:
         receiver.run()
     except KeyboardInterrupt:
-        print(f"\n[{current_time()}] 終了操作を受け付けました。")
+        print(f"\n[{current_time()}] アプリを終了しました。")
 
 
 if __name__ == "__main__":

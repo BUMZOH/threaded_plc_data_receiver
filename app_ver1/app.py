@@ -1,5 +1,3 @@
-"""PLCからモータ電流値を受信し、CSVファイルへ保存する。"""
-
 from __future__ import annotations
 
 import csv
@@ -9,7 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-import kv_com
+# Original Module
+from common_lib_mw import kv_com
 
 
 # -----------------------------------------------------------------------------
@@ -20,12 +19,16 @@ POLL_INTERVAL_SECONDS = 0.1
 DATA_POINT_COUNT = 1000
 
 BASE_DIRECTORY = Path(__file__).resolve().parent
+DATA_DIRECTORY = BASE_DIRECTORY / "data"
 
 
+# -----------------------------------------------------------------------------
+# CLASSES
+# -----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class MotorConfig:
     """モータごとのPLCデバイスと保存先設定。"""
-    
+
     name: str
     request_device: str
     completion_device: str
@@ -39,21 +42,21 @@ MOTOR_CONFIGS = (
         request_device="B100",
         completion_device="B200",
         data_start_device="EM30000",
-        output_directory=BASE_DIRECTORY / "motor1",
+        output_directory=DATA_DIRECTORY / "motor1",
     ),
     MotorConfig(
         name="motor2",
         request_device="B101",
         completion_device="B201",
         data_start_device="EM32000",
-        output_directory=BASE_DIRECTORY / "motor2",
+        output_directory=DATA_DIRECTORY / "motor2",
     ),
     MotorConfig(
         name="motor3",
         request_device="B102",
         completion_device="B202",
         data_start_device="EM34000",
-        output_directory=BASE_DIRECTORY / "motor3",
+        output_directory=DATA_DIRECTORY / "motor3",
     ),
 )
 
@@ -109,21 +112,25 @@ class MotorReceiver:
             request_is_on = False
         else:
             raise RuntimeError(
-                f"デバイス読込みエラー: "
+                f"デバイス読み込みエラー: "
                 f"device={config.request_device}, response={response}"
             )
 
         with self.state_lock:
             if not request_is_on:
+                # 要求=OFF の場合
                 self.request_latched[config.name] = False
                 return
 
             if self.request_latched[config.name]:
+                # 要求=ON が連続した場合
                 return
 
             if self.is_receiving[config.name]:
+                # 要求=ON latch=OFF データ受信中の場合
                 return
 
+            # 受信処理 開始時の記録
             self.request_latched[config.name] = True
             self.is_receiving[config.name] = True
 
@@ -136,7 +143,7 @@ class MotorReceiver:
             target=self._receive_and_save,
             args=(config,),
             name=f"{config.name}-receiver",
-            daemon=True,
+            daemon=False,
         )
         thread.start()
 
@@ -166,7 +173,7 @@ class MotorReceiver:
 
             if response != "OK":
                 raise RuntimeError(
-                    f"デバイス書込みエラー: "
+                    f"デバイス書き込みエラー: "
                     f"device={config.completion_device}, response={response}"
                 )
 
@@ -193,10 +200,10 @@ class MotorReceiver:
         print("モータ電流値 受信アプリ")
         print("=" * 72)
         print(f"PLC IPアドレス : {self.plc_ip_address}")
-        print(f"監視周期         : {POLL_INTERVAL_SECONDS} 秒")
-        print(f"受信点数         : 各モータ {DATA_POINT_COUNT} 点（32ビット）")
-        print("停止方法         : Ctrl + C")
-        print("-" * 72)
+        print(f"監視周期       : {POLL_INTERVAL_SECONDS} 秒")
+        print(f"受信点数       : 各モータ {DATA_POINT_COUNT} 点 (32ビット)")
+        print(f"停止方法       : Ctrl + C")
+        print("=" * 72)
 
         for config in MOTOR_CONFIGS:
             print(
@@ -205,11 +212,10 @@ class MotorReceiver:
                 f"完了={config.completion_device}"
             )
 
-        print("-" * 72)
-        print(f"[{current_time()}] PLC要求信号の監視を開始しました。")
 
-
-
+# -------------------------------------
+#   FUNCTIONS
+# -------------------------------------
 def save_csv(config: MotorConfig, values: list[int]) -> Path:
     """受信した電流値をCSVファイルへ保存する。"""
     if len(values) != DATA_POINT_COUNT:
@@ -247,10 +253,15 @@ def current_time() -> str:
 def main() -> None:
     receiver = MotorReceiver(PLC_IP_ADDRESS)
 
+    # receiver._check_request(MOTOR_CONFIGS[0])
+
     try:
         receiver.run()
     except KeyboardInterrupt:
         print(f"\n[{current_time()}] アプリを終了しました。")
+
+
+
 
 
 if __name__ == "__main__":

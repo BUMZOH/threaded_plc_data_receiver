@@ -45,7 +45,43 @@ def com_with_plc(ip_add: str, cmd: str) -> str:
         res = recv_data.decode("shift-jis", errors="replace")
 
         return res.replace("\r\n", "")
-    
+
+
+def read_device_b(ip_add:str, device: str) -> str:
+    """PLCのビットデバイス1点を読み込む。
+
+    Args:
+        ip_add (str): PLCのIPアドレス
+        device (str): デバイス名
+
+    Returns:
+        str: デバイス値("0"または"1")またはエラーコード
+
+    注意:
+        "MR10.11"のようにドットは使えない→"MR1011"と指定する
+        10進数指定デバイス(R/MR..)と16進数指定デバイス(B/W..)に注意
+    """
+    cmd = f"RD {device}\r"
+    return com_with_plc(ip_add, cmd)
+
+
+def write_device_b(ip_add: str, device: str, value: int) -> str:
+    """PLCのビットデバイス1点へ値を書き込む。
+
+    Args:
+        ip_add (str): PLCのIPアドレス
+        device (str): デバイス名
+        value (int): 書き込む値(0または1)
+
+    Returns:
+        str: "OK"(成功時)またはエラーコード
+    """
+    if value not in (0, 1):
+        raise ValueError("valueは0または1で指定してください。")
+
+    cmd = f"WR {device} {value}\r"
+    return com_with_plc(ip_add, cmd)
+
 
 def read_device_u(ip_add:str, device:str)->str:
     """ PLCのデバイス1点のデータ読み込み
@@ -441,6 +477,12 @@ if __name__=='__main__':
     ip_add = "172.20.1.111"
     ip_add = "192.168.8.1"
 
+    res = write_device_b(ip_add, "B10A", 1)
+    print(res)
+    exit()
+
+
+
     res = write_devices_u(ip_add, "EM10000", [0,0])
     print(res)
     exit()
@@ -482,6 +524,9 @@ if __name__=='__main__':
 
 """
 ----- 更新履歴 -----
+
+2026.8.9
+    read_device_bとwrite_device_bを追加
 
 2026.7.22
     write_devices_u 追加 （PLC一括リセット用)

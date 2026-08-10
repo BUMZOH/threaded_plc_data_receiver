@@ -36,22 +36,22 @@ class MotorConfig:
 MOTOR_CONFIGS = (
     MotorConfig(
         name="motor1",
-        request_device="B100",
-        completion_device="B200",
+        request_device="B10.0",
+        completion_device="B20.0",
         data_start_device="EM30000",
         output_directory=BASE_DIRECTORY / "motor1",
     ),
     MotorConfig(
         name="motor2",
-        request_device="B101",
-        completion_device="B201",
+        request_device="B10.1",
+        completion_device="B20.1",
         data_start_device="EM32000",
         output_directory=BASE_DIRECTORY / "motor2",
     ),
     MotorConfig(
         name="motor3",
-        request_device="B102",
-        completion_device="B202",
+        request_device="B10.2",
+        completion_device="B20.2",
         data_start_device="EM34000",
         output_directory=BASE_DIRECTORY / "motor3",
     ),
@@ -98,20 +98,10 @@ class MotorReceiver:
 
     def _check_request(self, config: MotorConfig) -> None:
         """1台分の受信要求を確認し、立上り時にサブスレッドを開始する。"""
-        response = kv_com.read_device_b(
+        request_is_on = read_bit_device(
             self.plc_ip_address,
             config.request_device,
         )
-
-        if response == "1":
-            request_is_on = True
-        elif response == "0":
-            request_is_on = False
-        else:
-            raise RuntimeError(
-                f"デバイス読込みエラー: "
-                f"device={config.request_device}, response={response}"
-            )
 
         with self.state_lock:
             if not request_is_on:
@@ -158,17 +148,11 @@ class MotorReceiver:
 
             csv_path = save_csv(config, values)
 
-            response = kv_com.write_device_b(
+            write_bit_device(
                 self.plc_ip_address,
                 config.completion_device,
-                1,
+                True,
             )
-
-            if response != "OK":
-                raise RuntimeError(
-                    f"デバイス書込みエラー: "
-                    f"device={config.completion_device}, response={response}"
-                )
 
             print(
                 f"[{current_time()}] {config.name}: 受信・保存完了\n"
@@ -208,6 +192,47 @@ class MotorReceiver:
         print("-" * 72)
         print(f"[{current_time()}] PLC要求信号の監視を開始しました。")
 
+
+def read_bit_device(plc_ip_address: str, device: str) -> bool:
+    """PLCのビットデバイスを読み、ON/OFFをboolで返す。"""
+    response = kv_com.read_device_u(plc_ip_address, device)
+
+    if response in ("E0", "E1", "E2", "E3", "E4", "E5", "E6"):
+        raise RuntimeError(
+            f"デバイス読込みエラー: device={device}, response={response}"
+        )
+
+    try:
+        value = int(response)
+    except ValueError as error:
+        raise RuntimeError(
+            f"デバイス値を数値に変換できません: "
+            f"device={device}, response={response}"
+        ) from error
+
+    if value not in (0, 1):
+        raise RuntimeError(
+            f"ビットデバイス値が0/1ではありません: "
+            f"device={device}, value={value}"
+        )
+
+    return value == 1
+
+
+def write_bit_device(
+    plc_ip_address: str,
+    device: str,
+    is_on: bool,
+) -> None:
+    """PLCのビットデバイスへON/OFFを書き込む。"""
+    value = 1 if is_on else 0
+    response = kv_com.write_device_u(plc_ip_address, device, value)
+
+    if response != "OK":
+        raise RuntimeError(
+            f"デバイス書込みエラー: device={device}, "
+            f"value={value}, response={response}"
+        )
 
 
 def save_csv(config: MotorConfig, values: list[int]) -> Path:
