@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>モータ電流値 受信アプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <main>
+        <h1>モータ電流値 受信アプリ</h1>
+
+        <p>
+            PLC IPアドレス:
+            <span id="plc-ip">192.168.8.1</span>
+        </p>
+
+        <p>
+            状態:
+            <strong id="status">停止中</strong>
+        </p>
+
+        <p>
+            表示モータ:
+            <strong id="chart-motor">未受信</strong>
+        </p>
+
+        <div class="buttons">
+            <button id="start-button" type="button">
+                監視開始
+            </button>
+
+            <button id="stop-button" type="button" disabled>
+                監視停止
+            </button>
+        </div>
+
+        <section class="chart-container">
+            <canvas id="motor-current-chart"></canvas>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

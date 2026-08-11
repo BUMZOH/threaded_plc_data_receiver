@@ -1,0 +1,19 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 30px;
+}
+
+h1 {
+    font-size: 24px;
+}
+
+button {
+    padding: 10px 20px;
+    margin-right: 10px;
+    font-size: 16px;
+}
+
+#status {
+    font-size: 18px;
+}
