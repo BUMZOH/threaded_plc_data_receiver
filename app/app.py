@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import json
+import sqlite3
+import struct
 import threading
 from time import perf_counter
 from concurrent.futures import ThreadPoolExecutor
@@ -18,12 +20,18 @@ from common_lib_mw import kv_com
 # -----------------------------------------------------------------------------
 # 設定
 # -----------------------------------------------------------------------------
-PLC_IP_ADDRESS = "172.21.0.15"
+# PLC_IP_ADDRESS = "172.21.0.15"
+PLC_IP_ADDRESS = "192.168.8.1"  # 自宅環境
 POLL_INTERVAL_SECONDS = 0.1
 DATA_POINT_COUNT = 500
 
+SAVE_MODE = "sqlite"    # "csv" または "sqlite"
+
 BASE_DIRECTORY = Path(__file__).resolve().parent
 DATA_DIRECTORY = BASE_DIRECTORY / "data"
+DATABASE_PATH = DATA_DIRECTORY / "measurement_data.db"
+
+SQLITE_LOCK = threading.Lock()
 
 
 # -----------------------------------------------------------------------------
@@ -102,6 +110,10 @@ class DataReceiver:
     def run(self) -> None:
         """要求デバイスを監視する。"""
         self._create_output_directories()
+
+        if SAVE_MODE == "sqlite":
+            initialize_database()
+
         self._print_startup_message()
 
         while not self.stop_event.is_set():
@@ -218,7 +230,7 @@ class DataReceiver:
             # 受信したデータをJavaScriptへPush
             self._push_data(config, values)
 
-            csv_path = save_csv(config, values)
+            save_path = save_data(config, values)
 
             response = kv_com.write_device_b(
                 self.plc_ip_address,
@@ -234,7 +246,7 @@ class DataReceiver:
 
             print(
                 f"[{current_time()}] {config.name}: 受信・保存完了\n"
-                f"    保存先: {csv_path}\n"
+                f"    保存先: {save_path}\n"
                 f"    完了通知ON: {config.completion_device}"
             )
 
@@ -257,6 +269,7 @@ class DataReceiver:
         print(f"PLC IPアドレス : {self.plc_ip_address}")
         print(f"監視周期       : {POLL_INTERVAL_SECONDS} 秒")
         print(f"受信点数       : 各データ {DATA_POINT_COUNT} 点 (32ビット)")
+        print(f"保存形式       : {SAVE_MODE}")
         print("=" * 72)
 
         for config in DATA_CONFIGS:
@@ -330,6 +343,13 @@ class AppApi:
             "status": "stopped",
             "message": "停止中",
         }
+
+    def get_data_names(self) -> list[str]:
+        """グラフ表示対象として選択可能な測定項目名を返す。"""
+        return [
+            config.name
+            for config in DATA_CONFIGS
+        ] 
  
     def get_status(self) -> dict[str, str]:
         """現在の監視状態を返す。"""
@@ -371,6 +391,78 @@ class AppApi:
 # -----------------------------------------------------------------------------
 # FUNCTIONS
 # -----------------------------------------------------------------------------
+def save_data(config: DataConfig, values: list[int]) -> Path:
+    """設定された保存形式に従って計測データを保存する。"""
+    if SAVE_MODE == "csv":
+        return save_csv(config, values)
+
+    if SAVE_MODE == "sqlite":
+        return save_sqlite(config, values)
+
+    raise ValueError(f"保存形式が不正です: {SAVE_MODE}")
+
+
+def initialize_database() -> None:
+    """SQLiteデータベースとテーブルを初期化する。"""
+    DATA_DIRECTORY.mkdir(parents=True, exist_ok=True)
+
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS measurement_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data_name TEXT NOT NULL,
+                measured_at TEXT NOT NULL,
+                data BLOB NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_measurement_data_name_time
+            ON measurement_data (data_name, measured_at)
+            """
+        )
+
+
+def save_sqlite(config: DataConfig, values: list[int]) -> Path:
+    """受信した計測データをSQLiteへ保存する。"""
+    if len(values) != DATA_POINT_COUNT:
+        raise ValueError(
+            f"受信点数が不正です: expected={DATA_POINT_COUNT}, "
+            f"actual={len(values)}"
+        )
+
+    measured_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 整数データをリトルエンディアンの32bit符号付き整数としてバイナリ化する
+    binary_data = struct.pack(
+        f"<{len(values)}i",
+        *values,
+    )
+
+    with SQLITE_LOCK:
+        with sqlite3.connect(DATABASE_PATH) as connection:
+            connection.execute(
+                """
+                INSERT INTO measurement_data (
+                    data_name,
+                    measured_at,
+                    data
+                )
+                VALUES (?, ?, ?)
+                """,
+                (
+                    config.name,
+                    measured_at,
+                    binary_data,
+                ),
+            )
+
+    return DATABASE_PATH
+
+
 def save_csv(config: DataConfig, values: list[int]) -> Path:
     """受信した計測データをCSVファイルへ保存する。"""
     if len(values) != DATA_POINT_COUNT:
@@ -406,6 +498,9 @@ def current_time() -> str:
 
 
 def main() -> None:
+    if SAVE_MODE not in ("csv", "sqlite"):
+        raise ValueError(f"保存形式が不正です: {SAVE_MODE}")
+
     receiver = DataReceiver(PLC_IP_ADDRESS)
     api = AppApi(receiver)
 

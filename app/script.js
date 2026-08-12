@@ -1,6 +1,7 @@
 const statusElement = document.getElementById("status");
 const startButton = document.getElementById("start-button");
 const stopButton = document.getElementById("stop-button");
+const dataSelect = document.getElementById("data-select");
 const chartDataElement = document.getElementById("chart-data");
 const chartCanvas = document.getElementById("data-chart");
 
@@ -49,7 +50,27 @@ const dataChart = new Chart(chartCanvas, {
     },
 });
 
+function setDataNames(dataNames) {
+    for (const dataName of dataNames) {
+        const option = document.createElement("option");
+
+        option.value = dataName;
+        option.textContent = dataName;
+
+        dataSelect.appendChild(option);
+    }
+}
+
 window.receiveData = function (payload) {
+    const selectedDataName = dataSelect.value;
+
+    if (
+        selectedDataName !== "all"
+        && selectedDataName !== payload.data_name
+    ) {
+        return;
+    }
+
     if (isChartBusy) {
         console.log(
             `グラフ描画中のため受信データを無視: ${payload.data_name}`
@@ -62,7 +83,7 @@ window.receiveData = function (payload) {
     try {
         const values = payload.values;
 
-        // 1000点のX軸を作る
+        // 受信データの点数に合わせてX軸を作る
         dataChart.data.labels = values.map(
             (_, index) => index + 1
         );
@@ -96,8 +117,6 @@ window.receiveData = function (payload) {
     }
 
 };
-
-
 
 function updateStatus(result) {
     statusElement.textContent = result.message;
@@ -135,6 +154,9 @@ startButton.addEventListener("click", startMonitoring);
 stopButton.addEventListener("click", stopMonitoring);
 
 window.addEventListener("pywebviewready", async () => {
+    const dataNames = await pywebview.api.get_data_names();
+    setDataNames(dataNames);
+
     const result = await pywebview.api.get_status();
     updateStatus(result);
 });
