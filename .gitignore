@@ -1,6 +1,8 @@
 # 自作ライブラリ(都度 git clone する)
 common_lib_mw/
 
+# データフォルダ
+data/
 
 # 仮想環境
 .venv/

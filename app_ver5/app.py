@@ -30,8 +30,8 @@ DATA_DIRECTORY = BASE_DIRECTORY / "data"
 # CLASSES
 # -----------------------------------------------------------------------------
 @dataclass(frozen=True)
-class MotorConfig:
-    """モータごとのPLCデバイスと保存先設定。"""
+class DataConfig:
+    """計測データごとのPLCデバイスと保存先設定。"""
 
     name: str
     request_device: str
@@ -40,22 +40,22 @@ class MotorConfig:
     output_directory: Path
 
 
-MOTOR_CONFIGS = (
-    MotorConfig(
+DATA_CONFIGS = (
+    DataConfig(
         name="motor1",
         request_device="B100",
         completion_device="B200",
         data_start_device="EM30000",
         output_directory=DATA_DIRECTORY / "motor1",
     ),
-    MotorConfig(
+    DataConfig(
         name="motor2",
         request_device="B101",
         completion_device="B201",
         data_start_device="EM32000",
         output_directory=DATA_DIRECTORY / "motor2",
     ),
-    MotorConfig(
+    DataConfig(
         name="motor3",
         request_device="B102",
         completion_device="B202",
@@ -65,8 +65,8 @@ MOTOR_CONFIGS = (
 )
 
 # ---------------------------------------------------------
-class MotorReceiver:
-    """PLC要求監視とモータ電流データ受信を管理する。"""
+class DataReceiver:
+    """PLC要求監視と計測データ受信を管理する。"""
 
     # Python内部用クラスのため、pywebviewのJavaScript API公開対象から除外する。
     # window内部まで解析されて再帰エラーになることを防ぐ。
@@ -76,10 +76,10 @@ class MotorReceiver:
         self.plc_ip_address = plc_ip_address
         self.window: webview.Window | None = None
 
-        # モータ台数分を並列実行できる固定サイズのスレッドプール。
+        # データ項目数分を並列実行できる固定サイズのスレッドプール。
         self.executor = ThreadPoolExecutor(
-            max_workers=len(MOTOR_CONFIGS),
-            thread_name_prefix="motor-receiver",
+            max_workers=len(DATA_CONFIGS),
+            thread_name_prefix="data-receiver",
         )
 
         # PLC監視ループを停止するためのイベント。
@@ -88,13 +88,13 @@ class MotorReceiver:
         # 要求信号がOFFへ戻るまで、同じ要求を再受付しないための状態。
         self.request_latched = {
             config.name: False
-            for config in MOTOR_CONFIGS
+            for config in DATA_CONFIGS
         }
 
-        # モータごとに受信処理が実行中かを表す。
+        # データ項目ごとに受信処理が実行中かを表す。
         self.is_receiving = {
             config.name: False
-            for config in MOTOR_CONFIGS
+            for config in DATA_CONFIGS
         }
 
         self.state_lock = threading.Lock()
@@ -106,7 +106,7 @@ class MotorReceiver:
 
         while not self.stop_event.is_set():
             try:
-                for config in MOTOR_CONFIGS:
+                for config in DATA_CONFIGS:
                     if self.stop_event.is_set():
                         break
 
@@ -130,29 +130,29 @@ class MotorReceiver:
         """JavaScriptへ通知するためのpywebviewウィンドウを保持する。"""
         self.window = window
 
-    def _push_motor_data(
+    def _push_data(
             self,
-            config: MotorConfig,
+            config: DataConfig,
             values: list[int],
     ) -> None:
-        """受信したモータ電流値をJavaScriptへPushする。"""
+        """受信した計測データをJavaScriptへPushする。"""
         if self.window is None:
             return
 
         payload = json.dumps(
             {
-                "motor_name": config.name,
+                "data_name": config.name,
                 "values": values,
             },
             ensure_ascii=False,
         )
 
         self.window.run_js(
-            f"window.receiveMotorData({payload});"
+            f"window.receiveData({payload});"
         )
 
 
-    def _check_request(self, config: MotorConfig) -> None:
+    def _check_request(self, config: DataConfig) -> None:
         """1台分の受信要求を確認し、立上り時に受信処理をスレッドプールへ投入する。"""
         response = kv_com.read_device_b(
             self.plc_ip_address,
@@ -199,8 +199,8 @@ class MotorReceiver:
             config,
         )
 
-    def _receive_and_save(self, config: MotorConfig) -> None:
-        """電流値を受信・保存し、PLCへ受信完了を通知する。"""
+    def _receive_and_save(self, config: DataConfig) -> None:
+        """計測データを受信・保存し、PLCへ受信完了を通知する。"""
         try:
             print(
                 f"[{current_time()}] {config.name}: "
@@ -216,7 +216,7 @@ class MotorReceiver:
             )
 
             # 受信したデータをJavaScriptへPush
-            self._push_motor_data(config, values)
+            self._push_data(config, values)
 
             csv_path = save_csv(config, values)
 
@@ -247,19 +247,19 @@ class MotorReceiver:
 
     @staticmethod
     def _create_output_directories() -> None:
-        for config in MOTOR_CONFIGS:
+        for config in DATA_CONFIGS:
             config.output_directory.mkdir(parents=True, exist_ok=True)
 
     def _print_startup_message(self) -> None:
         print("=" * 72)
-        print("モータ電流値 受信アプリ")
+        print("設備データ 受信アプリ")
         print("=" * 72)
         print(f"PLC IPアドレス : {self.plc_ip_address}")
         print(f"監視周期       : {POLL_INTERVAL_SECONDS} 秒")
-        print(f"受信点数       : 各モータ {DATA_POINT_COUNT} 点 (32ビット)")
+        print(f"受信点数       : 各データ {DATA_POINT_COUNT} 点 (32ビット)")
         print("=" * 72)
 
-        for config in MOTOR_CONFIGS:
+        for config in DATA_CONFIGS:
             print(
                 f"{config.name}: 要求={config.request_device}, "
                 f"データ={config.data_start_device}, "
@@ -271,7 +271,7 @@ class MotorReceiver:
 class AppApi:
     """GUIから呼び出すPython API。"""
 
-    def __init__(self, receiver: MotorReceiver) -> None:
+    def __init__(self, receiver: DataReceiver) -> None:
         self.receiver = receiver
         self.monitor_thread: threading.Thread | None = None
         self.lock = threading.Lock()
@@ -371,8 +371,8 @@ class AppApi:
 # -----------------------------------------------------------------------------
 # FUNCTIONS
 # -----------------------------------------------------------------------------
-def save_csv(config: MotorConfig, values: list[int]) -> Path:
-    """受信した電流値をCSVファイルへ保存する。"""
+def save_csv(config: DataConfig, values: list[int]) -> Path:
+    """受信した計測データをCSVファイルへ保存する。"""
     if len(values) != DATA_POINT_COUNT:
         raise ValueError(
             f"受信点数が不正です: expected={DATA_POINT_COUNT}, "
@@ -392,7 +392,7 @@ def save_csv(config: MotorConfig, values: list[int]) -> Path:
 
     with csv_path.open("w", encoding="utf-8-sig", newline="") as file:
         writer = csv.writer(file)
-        writer.writerow(["point_no", "current_value"])
+        writer.writerow(["point_no", "data_value"])
 
         for point_no, value in enumerate(values, start=1):
             writer.writerow([point_no, value])
@@ -406,11 +406,11 @@ def current_time() -> str:
 
 
 def main() -> None:
-    receiver = MotorReceiver(PLC_IP_ADDRESS)
+    receiver = DataReceiver(PLC_IP_ADDRESS)
     api = AppApi(receiver)
 
     window = webview.create_window(
-        title="モータ電流値 受信アプリ",
+        title="設備データ 受信アプリ",
         url="index.html",
         js_api=api,
         width=1000,
