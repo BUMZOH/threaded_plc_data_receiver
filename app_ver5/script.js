@@ -15,7 +15,7 @@ const dataChart = new Chart(chartCanvas, {
                 label: "計測値",
                 data: [],
                 borderWidth: 1,
-                pointRadius: 0,
+                pointRadius: 2,
             },
         ],
     },
@@ -72,9 +72,21 @@ window.receiveData = function (payload) {
 
         chartDataElement.textContent = payload.data_name;
 
+        //--------------
+        const startTime = performance.now();
+        //--------------
+
         dataChart.update("none");
 
         requestAnimationFrame(() => {
+
+            //--------------
+            const elapsedTime = performance.now() - startTime;
+            console.log(
+                `グラフ描画時間: ${elapsedTime.toFixed(2)} ms`
+            );
+            //--------------
+
             isChartBusy = false;
         });
 

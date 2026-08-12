@@ -18,9 +18,9 @@ from common_lib_mw import kv_com
 # -----------------------------------------------------------------------------
 # 設定
 # -----------------------------------------------------------------------------
-PLC_IP_ADDRESS = "192.168.8.1"
+PLC_IP_ADDRESS = "172.21.0.15"
 POLL_INTERVAL_SECONDS = 0.1
-DATA_POINT_COUNT = 1000
+DATA_POINT_COUNT = 500
 
 BASE_DIRECTORY = Path(__file__).resolve().parent
 DATA_DIRECTORY = BASE_DIRECTORY / "data"
@@ -42,18 +42,18 @@ class DataConfig:
 
 DATA_CONFIGS = (
     DataConfig(
-        name="motor1",
-        request_device="B100",
-        completion_device="B200",
+        name="ToolB_Cross_Torque",
+        request_device="B1000",
+        completion_device="B1008",
         data_start_device="EM30000",
-        output_directory=DATA_DIRECTORY / "motor1",
+        output_directory=DATA_DIRECTORY / "data1",
     ),
     DataConfig(
-        name="motor2",
-        request_device="B101",
-        completion_device="B201",
-        data_start_device="EM32000",
-        output_directory=DATA_DIRECTORY / "motor2",
+        name="SpindleInverter_MotorCurrent",
+        request_device="B1010",
+        completion_device="B1018",
+        data_start_device="EM31000",
+        output_directory=DATA_DIRECTORY / "data2",
     ),
     DataConfig(
         name="motor3",
@@ -208,8 +208,8 @@ class DataReceiver:
                 f"{DATA_POINT_COUNT}点"
             )
 
-            # 2Wordで1点のため、32ビットデータとして1000点読み込む。
-            values = kv_com.read_devices_d(
+            # 2Wordで1点のため、32ビットデータとして指定した点数読み込む。
+            values = kv_com.read_devices_l(
                 self.plc_ip_address,
                 config.data_start_device,
                 DATA_POINT_COUNT,
