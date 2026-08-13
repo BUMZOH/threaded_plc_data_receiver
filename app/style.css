@@ -184,6 +184,22 @@ button:disabled {
     cursor: default;
 }
 
+.communication-status {
+    margin-bottom: 20px;
+    padding: 10px 14px;
+
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+
+    font-size: 14px;
+}
+
+.communication-label {
+    margin-right: 8px;
+    color: #6b7280;
+}
+
 .chart-card {
     padding: 20px;
 

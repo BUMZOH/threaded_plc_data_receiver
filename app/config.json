@@ -1,0 +1,35 @@
+{
+    "plc_ip_address": "192.168.8.1",
+    "poll_interval_seconds": 0.1,
+    "data_point_count": 500,
+
+    "data_configs": [
+        {
+            "name": "ToolB_Cross_Torque",
+            "request_device": "B1000",
+            "completion_device": "B1008",
+            "judge_ok_device": "B1009",
+            "judge_ng_device": "B100A",
+            "data_start_device": "EM30000",
+            "output_directory": "data1"
+        },
+        {
+            "name": "SpindleInverter_MotorCurrent",
+            "request_device": "B1010",
+            "completion_device": "B1018",
+            "judge_ok_device": "B1019",
+            "judge_ng_device": "B101A",
+            "data_start_device": "EM31000",
+            "output_directory": "data2"
+        },
+        {
+            "name": "measurement3",
+            "request_device": "B1020",
+            "completion_device": "B1028",
+            "judge_ok_device": "B1029",
+            "judge_ng_device": "B102A",
+            "data_start_device": "EM32000",
+            "output_directory": "data3"
+        }
+    ]
+}

@@ -20,12 +20,8 @@ from common_lib_mw import kv_com
 # -----------------------------------------------------------------------------
 # 設定
 # -----------------------------------------------------------------------------
-# PLC_IP_ADDRESS = "172.21.0.15"
-PLC_IP_ADDRESS = "192.168.8.1"  # 自宅環境
-POLL_INTERVAL_SECONDS = 0.1
-DATA_POINT_COUNT = 500
-
 BASE_DIRECTORY = Path(__file__).resolve().parent
+CONFIG_PATH = BASE_DIRECTORY / "config.json"
 DATA_DIRECTORY = BASE_DIRECTORY / "data"
 DATABASE_PATH = DATA_DIRECTORY / "measurement_data.db"
 
@@ -43,31 +39,32 @@ class DataConfig:
     request_device: str
     completion_device: str
     data_start_device: str
+    judge_ok_device: str
+    judge_ng_device: str
     output_directory: Path
 
+def load_config() -> dict:
+    """JSON設定ファイルを読み込む。"""
+    with CONFIG_PATH.open("r", encoding="utf-8") as file:
+        return json.load(file)
 
-DATA_CONFIGS = (
+CONFIG = load_config()
+
+PLC_IP_ADDRESS = CONFIG["plc_ip_address"]
+POLL_INTERVAL_SECONDS = CONFIG["poll_interval_seconds"]
+DATA_POINT_COUNT = CONFIG["data_point_count"]
+
+DATA_CONFIGS = tuple(
     DataConfig(
-        name="ToolB_Cross_Torque",
-        request_device="B1000",
-        completion_device="B1008",
-        data_start_device="EM30000",
-        output_directory=DATA_DIRECTORY / "data1",
-    ),
-    DataConfig(
-        name="SpindleInverter_MotorCurrent",
-        request_device="B1010",
-        completion_device="B1018",
-        data_start_device="EM31000",
-        output_directory=DATA_DIRECTORY / "data2",
-    ),
-    DataConfig(
-        name="motor3",
-        request_device="B102",
-        completion_device="B202",
-        data_start_device="EM34000",
-        output_directory=DATA_DIRECTORY / "data3",
-    ),
+        name=config["name"],
+        request_device=config["request_device"],
+        completion_device=config["completion_device"],
+        data_start_device=config["data_start_device"],
+        judge_ok_device=config["judge_ok_device"],
+        judge_ng_device=config["judge_ng_device"],
+        output_directory=DATA_DIRECTORY / config["output_directory"],
+    )
+    for config in CONFIG["data_configs"]
 )
 
 # ---------------------------------------------------------
@@ -141,6 +138,20 @@ class DataReceiver:
         """JavaScriptへ通知するためのpywebviewウィンドウを保持する。"""
         self.window = window
 
+    def _push_status(self, message: str) -> None:
+        """通信状況をJavaScriptへPushする。"""
+        if self.window is None:
+            return
+
+        payload = json.dumps(
+            message,
+            ensure_ascii=False,
+        )
+
+        self.window.run_js(
+            f"window.receiveStatus({payload});"
+        )
+
     def _push_data(
             self,
             config: DataConfig,
@@ -200,6 +211,10 @@ class DataReceiver:
             self.request_latched[config.name] = True
             self.is_receiving[config.name] = True
 
+        self._push_status(
+            f"{config.name} データ受信開始"
+        )
+
         print(
             f"[{current_time()}] {config.name}: "
             f"受信要求ON ({config.request_device})"
@@ -231,6 +246,28 @@ class DataReceiver:
 
             save_path = save_data(config, values, self.save_mode)
 
+            # 受信データを判定する
+            judge_is_ok = judge_data(values)
+
+            if judge_is_ok:
+                judge_device = config.judge_ok_device
+                judge_result = "OK"
+            else:
+                judge_device = config.judge_ng_device
+                judge_result = "NG"
+
+            response = kv_com.write_device_b(
+                self.plc_ip_address,
+                judge_device,
+                1,
+            )
+
+            if response != "OK":
+                raise RuntimeError(
+                    f"判定デバイス書き込みエラー: "
+                    f"device={judge_device}, response={response}"
+                )
+
             response = kv_com.write_device_b(
                 self.plc_ip_address,
                 config.completion_device,
@@ -243,9 +280,15 @@ class DataReceiver:
                     f"device={config.completion_device}, response={response}"
                 )
 
+            self._push_status(
+                f"{config.name} 受信完了 / 判定 = {judge_result}"
+            )
+
             print(
                 f"[{current_time()}] {config.name}: 受信・保存完了\n"
                 f"    保存先: {save_path}\n"
+                f"    判定結果: {judge_result}\n"
+                f"    判定通知ON: {judge_device}\n"
                 f"    完了通知ON: {config.completion_device}"
             )
 
@@ -343,6 +386,10 @@ class AppApi:
             "message": "停止中",
         }
 
+    def get_plc_ip_address(self) -> str:
+        """PLC IPアドレスを返す。"""
+        return self.receiver.plc_ip_address
+
     def get_data_names(self) -> list[str]:
         """グラフ表示対象として選択可能な測定項目名を返す。"""
         return [
@@ -422,6 +469,11 @@ class AppApi:
 # -----------------------------------------------------------------------------
 # FUNCTIONS
 # -----------------------------------------------------------------------------
+def judge_data(values: list[int]) -> bool:
+    """受信データを判定し、OKならTrue、NGならFalseを返す。"""
+    # 現状はOK(True)のみ返却する
+    return True
+
 def save_data(config: DataConfig, values: list[int], save_mode: str) -> Path:
     """設定された保存形式に従って計測データを保存する。"""
     if save_mode == "csv":

@@ -1,4 +1,6 @@
 const statusElement = document.getElementById("status");
+const plcIpElement = document.getElementById("plc-ip");
+const communicationStatusElement = document.getElementById("communication-status");
 const startButton = document.getElementById("start-button");
 const stopButton = document.getElementById("stop-button");
 const saveModeSelect = document.getElementById("save-mode-select");
@@ -82,6 +84,10 @@ function updateHistoryButtons(isRunning) {
     previousButton.disabled = isDisabled;
     nextButton.disabled = isDisabled;
     latestButton.disabled = isDisabled;
+}
+
+window.receiveStatus = function (message) {
+    communicationStatusElement.textContent = message;
 }
 
 window.receiveData = function (payload) {
@@ -175,6 +181,8 @@ async function stopMonitoring() {
     try {
         const result = await pywebview.api.stop_monitoring();
         updateStatus(result);
+
+        communicationStatusElement.textContent = "---";
     } catch (error) {
         console.error(error);
         statusElement.textContent = "停止エラー";
@@ -249,6 +257,9 @@ dataSelect.addEventListener("change", async () => {
 });
 
 window.addEventListener("pywebviewready", async () => {
+    const plcIpAddress = await pywebview.api.get_plc_ip_address();
+    plcIpElement.textContent = plcIpAddress;
+
     const dataNames = await pywebview.api.get_data_names();
     setDataNames(dataNames);
 
