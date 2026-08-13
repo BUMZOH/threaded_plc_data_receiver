@@ -25,6 +25,8 @@ PLC_IP_ADDRESS = "192.168.8.1"  # 自宅環境
 POLL_INTERVAL_SECONDS = 0.1
 DATA_POINT_COUNT = 500
 
+SAVE_MODE = "sqlite"    # "csv" または "sqlite"
+
 BASE_DIRECTORY = Path(__file__).resolve().parent
 DATA_DIRECTORY = BASE_DIRECTORY / "data"
 DATABASE_PATH = DATA_DIRECTORY / "measurement_data.db"
@@ -66,7 +68,7 @@ DATA_CONFIGS = (
         request_device="B102",
         completion_device="B202",
         data_start_device="EM34000",
-        output_directory=DATA_DIRECTORY / "data3",
+        output_directory=DATA_DIRECTORY / "motor3",
     ),
 )
 
@@ -81,7 +83,6 @@ class DataReceiver:
     def __init__(self, plc_ip_address: str) -> None:
         self.plc_ip_address = plc_ip_address
         self.window: webview.Window | None = None
-        self.save_mode = "sqlite"
 
         # データ項目数分を並列実行できる固定サイズのスレッドプール。
         self.executor = ThreadPoolExecutor(
@@ -110,7 +111,7 @@ class DataReceiver:
         """要求デバイスを監視する。"""
         self._create_output_directories()
 
-        if self.save_mode == "sqlite":
+        if SAVE_MODE == "sqlite":
             initialize_database()
 
         self._print_startup_message()
@@ -153,7 +154,6 @@ class DataReceiver:
         payload = json.dumps(
             {
                 "data_name": config.name,
-                "measured_at": current_time(),
                 "values": values,
             },
             ensure_ascii=False,
@@ -162,6 +162,7 @@ class DataReceiver:
         self.window.run_js(
             f"window.receiveData({payload});"
         )
+
 
     def _check_request(self, config: DataConfig) -> None:
         """1台分の受信要求を確認し、立上り時に受信処理をスレッドプールへ投入する。"""
@@ -229,7 +230,7 @@ class DataReceiver:
             # 受信したデータをJavaScriptへPush
             self._push_data(config, values)
 
-            save_path = save_data(config, values, self.save_mode)
+            save_path = save_data(config, values)
 
             response = kv_com.write_device_b(
                 self.plc_ip_address,
@@ -268,7 +269,7 @@ class DataReceiver:
         print(f"PLC IPアドレス : {self.plc_ip_address}")
         print(f"監視周期       : {POLL_INTERVAL_SECONDS} 秒")
         print(f"受信点数       : 各データ {DATA_POINT_COUNT} 点 (32ビット)")
-        print(f"保存形式       : {self.save_mode}")
+        print(f"保存形式       : {SAVE_MODE}")
         print("=" * 72)
 
         for config in DATA_CONFIGS:
@@ -348,39 +349,7 @@ class AppApi:
         return [
             config.name
             for config in DATA_CONFIGS
-        ]
-
-    def set_save_mode(self, save_mode: str) -> None:
-        """データ保存形式を設定する。"""
-        if save_mode not in ("csv", "sqlite"):
-            raise ValueError(f"保存形式が不正です: {save_mode}")
-
-        self.receiver.save_mode = save_mode
-
-    def get_saved_data(
-            self,
-            data_name: str,
-            direction: str,
-            current_key=None,
-    ) -> dict | None:
-        """指定した測定対象の保存データを返す。"""
-        if self.receiver.save_mode == "sqlite":
-            return load_saved_data_sqlite(
-                data_name,
-                direction,
-                current_key,
-            )
-
-        if self.receiver.save_mode == "csv":
-            return load_saved_data_csv(
-                data_name,
-                direction,
-                current_key,
-            )
-
-        raise ValueError(
-            f"保存形式が不正です: {self.receiver.save_mode}"
-        )
+        ] 
  
     def get_status(self) -> dict[str, str]:
         """現在の監視状態を返す。"""
@@ -422,15 +391,15 @@ class AppApi:
 # -----------------------------------------------------------------------------
 # FUNCTIONS
 # -----------------------------------------------------------------------------
-def save_data(config: DataConfig, values: list[int], save_mode: str) -> Path:
+def save_data(config: DataConfig, values: list[int]) -> Path:
     """設定された保存形式に従って計測データを保存する。"""
-    if save_mode == "csv":
+    if SAVE_MODE == "csv":
         return save_csv(config, values)
 
-    if save_mode == "sqlite":
+    if SAVE_MODE == "sqlite":
         return save_sqlite(config, values)
 
-    raise ValueError(f"保存形式が不正です: {save_mode}")
+    raise ValueError(f"保存形式が不正です: {SAVE_MODE}")
 
 
 def initialize_database() -> None:
@@ -494,174 +463,6 @@ def save_sqlite(config: DataConfig, values: list[int]) -> Path:
     return DATABASE_PATH
 
 
-def load_saved_data_sqlite(
-        data_name: str,
-        direction: str,
-        current_id: int | None = None,
-) -> dict | None:
-    """指定した測定対象の保存データをSQLiteから読み込む。"""
-
-    if direction == "oldest":
-        sql = """
-            SELECT id, measured_at, data
-            FROM measurement_data
-            WHERE data_name = ?
-            ORDER BY id ASC
-            LIMIT 1
-        """
-        params = (data_name,)
-
-    elif direction == "latest":
-        sql = """
-            SELECT id, measured_at, data
-            FROM measurement_data
-            WHERE data_name = ?
-            ORDER BY id DESC
-            LIMIT 1
-        """
-        params = (data_name,)
-
-    elif direction == "previous":
-        sql = """
-            SELECT id, measured_at, data
-            FROM measurement_data
-            WHERE data_name = ?
-              AND id < ?
-            ORDER BY id DESC
-            LIMIT 1
-        """
-        params = (data_name, current_id)
-
-    elif direction == "next":
-        sql = """
-            SELECT id, measured_at, data
-            FROM measurement_data
-            WHERE data_name = ?
-              AND id > ?
-            ORDER BY id ASC
-            LIMIT 1
-        """
-        params = (data_name, current_id)
-
-    else:
-        raise ValueError(f"読み込み方向が不正です: {direction}")
-
-    with sqlite3.connect(DATABASE_PATH) as connection:
-        cursor = connection.execute(sql, params)
-        row = cursor.fetchone()
-
-    if row is None:
-        return None
-
-    record_id, measured_at, binary_data = row
-
-    # データ数 = BLOBのバイト数 ÷ 4（32ビット整数は4バイト）
-    point_count = len(binary_data) // 4
-
-    values = struct.unpack(
-        f"<{point_count}i",
-        binary_data,
-    )
-
-    return {
-        "id": record_id,
-        "data_name": data_name,
-        "measured_at": measured_at,
-        "values": list(values)
-    }
-
-def load_saved_data_csv(
-        data_name: str,
-        direction: str,
-        current_key: str | None = None,
-) -> dict | None:
-    """指定した測定対象の保存データをCSVファイルから読み込む。"""
-
-    config = next(
-        (
-            config
-            for config in DATA_CONFIGS
-            if config.name == data_name
-        ),
-        None,
-    )
-
-    if config is None:
-        raise ValueError(f"測定対象が不正です: {data_name}")
-
-    csv_paths = sorted(
-        config.output_directory.glob(f"{data_name}_*.csv"),
-        key=lambda path: path.name,
-    )
-
-    if not csv_paths:
-        return None
-
-    if direction == "oldest":
-        csv_path = csv_paths[0]
-
-    elif direction == "latest":
-        csv_path = csv_paths[-1]
-
-    elif direction in ("previous", "next"):
-        if current_key is None:
-            return None
-
-        file_names = [
-            path.name
-            for path in csv_paths
-        ]
-
-        if current_key not in file_names:
-            return None
-
-        current_index = file_names.index(current_key)
-
-        if direction == "previous":
-            next_index = current_index -1
-        else:
-            next_index = current_index + 1
-
-        if not 0 <= next_index < len(csv_paths):
-            return None
-
-        csv_path = csv_paths[next_index]
-
-    else:
-        raise ValueError(f"読み込み方向が不正です: {direction}")
-
-    values = []
-
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as file:
-        reader = csv.reader(file)
-
-        # ヘッダー行を読み飛ばす
-        next(reader)
-
-        for row in reader:
-            values.append(int(row[1]))
-
-    timestamp_text = csv_path.stem.removeprefix(
-        f"{data_name}_"
-    )
-
-    timestamp_text = timestamp_text[:15]
-
-    measured_at = datetime.strptime(
-        timestamp_text,
-        "%Y%m%d_%H%M%S",
-    ).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
-
-    return {
-        "id": csv_path.name,
-        "data_name": data_name,
-        "measured_at": measured_at,
-        "values": values,
-    }
-
-
 def save_csv(config: DataConfig, values: list[int]) -> Path:
     """受信した計測データをCSVファイルへ保存する。"""
     if len(values) != DATA_POINT_COUNT:
@@ -697,6 +498,9 @@ def current_time() -> str:
 
 
 def main() -> None:
+    if SAVE_MODE not in ("csv", "sqlite"):
+        raise ValueError(f"保存形式が不正です: {SAVE_MODE}")
+
     receiver = DataReceiver(PLC_IP_ADDRESS)
     api = AppApi(receiver)
 

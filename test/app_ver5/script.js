@@ -1,20 +1,11 @@
 const statusElement = document.getElementById("status");
 const startButton = document.getElementById("start-button");
 const stopButton = document.getElementById("stop-button");
-const saveModeSelect = document.getElementById("save-mode-select");
 const dataSelect = document.getElementById("data-select");
 const chartDataElement = document.getElementById("chart-data");
-
-const measuredAtElement = document.getElementById("measured-at");
-const oldestButton = document.getElementById("oldest-button");
-const previousButton = document.getElementById("previous-button");
-const nextButton = document.getElementById("next-button");
-const latestButton = document.getElementById("latest-button");
-
 const chartCanvas = document.getElementById("data-chart");
 
 let isChartBusy = false;
-let currentRecordKey = null;
 
 const dataChart = new Chart(chartCanvas, {
     type: "line",
@@ -70,18 +61,6 @@ function setDataNames(dataNames) {
     }
 }
 
-function updateHistoryButtons(isRunning) {
-    const isDisabled = (
-        isRunning
-        || dataSelect.value === "all"
-    );
-
-    oldestButton.disabled = isDisabled;
-    previousButton.disabled = isDisabled;
-    nextButton.disabled = isDisabled;
-    latestButton.disabled = isDisabled;
-}
-
 window.receiveData = function (payload) {
     const selectedDataName = dataSelect.value;
 
@@ -113,7 +92,6 @@ window.receiveData = function (payload) {
         dataChart.data.datasets[0].label = payload.data_name;
 
         chartDataElement.textContent = payload.data_name;
-        measuredAtElement.textContent = payload.measured_at;
 
         //--------------
         const startTime = performance.now();
@@ -147,9 +125,6 @@ function updateStatus(result) {
 
     startButton.disabled = isRunning;
     stopButton.disabled = !isRunning;
-    saveModeSelect.disabled = isRunning;
-
-    updateHistoryButtons(isRunning);
 }
 
 
@@ -174,72 +149,9 @@ async function stopMonitoring() {
     }
 }
 
-async function showSavedData(direction){
-    try {
-        const dataName = dataSelect.value;
-
-        const result = await pywebview.api.get_saved_data(
-            dataName,
-            direction,
-            currentRecordKey
-        );
-        
-        if (result === null) {
-            return;
-        }
-
-        currentRecordKey = result.id;
-
-        window.receiveData(result);
-
-    } catch (error) {
-        console.error(error);
-    }
-}
-
 
 startButton.addEventListener("click", startMonitoring);
 stopButton.addEventListener("click", stopMonitoring);
-
-
-oldestButton.addEventListener(
-    "click",
-    () => showSavedData("oldest")
-);
-
-previousButton.addEventListener(
-    "click",
-    () => showSavedData("previous")
-);
-
-nextButton.addEventListener(
-    "click",
-    () => showSavedData("next")
-);
-
-latestButton.addEventListener(
-    "click",
-    () => showSavedData("latest")
-);
-
-saveModeSelect.addEventListener("change", async () => {
-    try {
-        await pywebview.api.set_save_mode(saveModeSelect.value);
-
-        currentRecordKey = null;
-        measuredAtElement.textContent = "";
-    } catch (error) {
-        console.error(error);
-    }
-});
-
-dataSelect.addEventListener("change", async () => {
-    currentRecordKey = null;
-    measuredAtElement.textContent = "";
-
-    const result = await pywebview.api.get_status();
-    updateHistoryButtons(result.status === "running");
-});
 
 window.addEventListener("pywebviewready", async () => {
     const dataNames = await pywebview.api.get_data_names();

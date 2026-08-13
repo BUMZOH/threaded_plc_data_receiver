@@ -22,14 +22,6 @@
         </p>
 
         <p>
-            データ出力形式:
-            <select id="save-mode-select">
-                <option value="sqlite" selected>SQLite</option>
-                <option value="csv">CSV</option>
-            </select>
-        </p>
-
-        <p>
             グラフ表示:
             <select id="data-select">
                 <option value="all">すべて</option>
@@ -54,30 +46,6 @@
         <section class="chart-container">
             <canvas id="data-chart"></canvas>
         </section>
-
-        <p>
-            取得日時:
-            <strong id="measured-at">-</strong>
-        </p>
-
-        <div class="history-buttons">
-            <button id="oldest-button" type="button">
-                |&lt;
-            </button>
-
-            <button id="previous-button" type="button">
-                &lt;
-            </button>
-
-            <button id="next-button" type="button">
-                &gt;
-            </button>
-
-            <button id="latest-button" type="button">
-                &gt;|
-            </button>
-        </div>
-
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
