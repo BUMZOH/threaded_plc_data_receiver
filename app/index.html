@@ -9,74 +9,92 @@
 
 <body>
     <main>
-        <h1>設備データ 受信アプリ</h1>
+        <header class="app-header">
+            <div>
+                <h1>設備データ 受信アプリ</h1>
 
-        <p>
-            PLC IPアドレス:
-            <span id="plc-ip">192.168.8.1</span>
-        </p>
+                <p class="plc-info">
+                    PLC IPアドレス:
+                    <span id="plc-ip">192.168.8.1</span>
+                </p>
+            </div>
 
-        <p>
-            状態:
-            <strong id="status">停止中</strong>
-        </p>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <strong id="status">停止中</strong>
+            </div>
+        </header>
 
-        <p>
-            データ出力形式:
-            <select id="save-mode-select">
-                <option value="sqlite" selected>SQLite</option>
-                <option value="csv">CSV</option>
-            </select>
-        </p>
 
-        <p>
-            グラフ表示:
-            <select id="data-select">
-                <option value="all">すべて</option>
-            </select>
-        </p>
+        <section class="control-panel">
+            <div class="control-item">
+                <label for="save-mode-select">
+                    保存形式
+                </label>
 
-        <p>
-            表示データ:
-            <strong id="chart-data">未受信</strong>
-        </p>
+                <select id="save-mode-select">
+                    <option value="sqlite" selected>SQLite</option>
+                    <option value="csv">CSV</option>
+                </select>
+            </div>
 
-        <div class="buttons">
-            <button id="start-button" type="button">
-                監視開始
-            </button>
+            <div class="control-item">
+                <label for="data-select">
+                    表示データ
+                </label>
 
-            <button id="stop-button" type="button" disabled>
-                監視停止
-            </button>
-        </div>
+                <select id="data-select">
+                    <option value="all">すべて</option>
+                </select>
+            </div>
 
-        <section class="chart-container">
-            <canvas id="data-chart"></canvas>
+            <div class="control-buttons">
+                <button id="start-button" type="button">
+                    監視開始
+                </button>
+
+                <button id="stop-button" type="button" disabled>
+                    監視停止
+                </button>
+            </div>
         </section>
 
-        <p>
-            取得日時:
-            <strong id="measured-at">-</strong>
-        </p>
 
-        <div class="history-buttons">
-            <button id="oldest-button" type="button">
-                |&lt;
-            </button>
+        <section class="chart-card">
+            <div class="chart-header">
+                <div>
+                    <span class="chart-label">表示データ</span>
+                    <strong id="chart-data">未受信</strong>
+                </div>
 
-            <button id="previous-button" type="button">
-                &lt;
-            </button>
+                <div class="measured-at">
+                    <span class="chart-label">取得日時</span>
+                    <strong id="measured-at">-</strong>
+                </div>
+            </div>
 
-            <button id="next-button" type="button">
-                &gt;
-            </button>
+            <div class="chart-container">
+                <canvas id="data-chart"></canvas>
+            </div>
 
-            <button id="latest-button" type="button">
-                &gt;|
-            </button>
-        </div>
+            <div class="history-buttons">
+                <button id="oldest-button" type="button">
+                    |&lt;
+                </button>
+
+                <button id="previous-button" type="button">
+                    &lt;
+                </button>
+
+                <button id="next-button" type="button">
+                    &gt;
+                </button>
+
+                <button id="latest-button" type="button">
+                    &gt;|
+                </button>
+            </div>
+        </section>
 
     </main>
 

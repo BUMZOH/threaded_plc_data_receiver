@@ -11,6 +11,8 @@ const previousButton = document.getElementById("previous-button");
 const nextButton = document.getElementById("next-button");
 const latestButton = document.getElementById("latest-button");
 
+const statusBadge = document.querySelector(".status-badge");
+
 const chartCanvas = document.getElementById("data-chart");
 
 let isChartBusy = false;
@@ -144,6 +146,11 @@ function updateStatus(result) {
     statusElement.textContent = result.message;
 
     const isRunning = result.status === "running";
+    
+    statusBadge.classList.toggle(
+        "running",
+        isRunning
+    );
 
     startButton.disabled = isRunning;
     stopButton.disabled = !isRunning;
