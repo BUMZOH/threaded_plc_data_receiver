@@ -1,5 +1,5 @@
 {
-    "plc_ip_address": "192.168.8.1",
+    "plc_ip_address": "172.21.0.15",
     "poll_interval_seconds": 0.1,
     "data_point_count": 500,
 

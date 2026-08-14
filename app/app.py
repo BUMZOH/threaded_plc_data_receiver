@@ -770,7 +770,7 @@ def main() -> None:
     # pywebviewのウィンドウが閉じられたら api.shutdown() を実行する
     APP_WINDOW.events.closed += api.shutdown
 
-    webview.start(debug=True)
+    webview.start(debug=False)
 
 
 # -----------------------------------------------------------------------------
