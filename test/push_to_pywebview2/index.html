@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Clock Sample</title>
+</head>
+
+<body>
+
+    <h1>Python Push Clock</h1>
+
+    <p id="time">---</p>
+
+    <button id="start-button" type="button">
+        開始
+    </button>
+
+    <button id="stop-button" type="button">
+        停止
+    </button>
+
+    <script>
+        const timeElement =
+            document.getElementById("time");
+
+        const startButton =
+            document.getElementById("start-button");
+
+        const stopButton =
+            document.getElementById("stop-button");
+
+
+        window.receiveTime = function (currentTime) {
+            timeElement.textContent = currentTime;
+        };
+
+
+        startButton.addEventListener(
+            "click",
+            async () => {
+                await pywebview.api.start_clock();
+            }
+        );
+
+
+        stopButton.addEventListener(
+            "click",
+            async () => {
+                await pywebview.api.stop_clock();
+            }
+        );
+    </script>
+
+</body>
+
+</html>

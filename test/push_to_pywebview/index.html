@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Sample</title>
+</head>
+<body>
+    
+    <p id="data-name"></p>
+    <p id="values"></p>
+
+    <script>
+        window.receiveData = function (payload) {
+            document.getElementById("data-name").textContent = payload.data_name;
+            document.getElementById("values").textContent = payload.values;
+        }
+    </script>
+
+</body>
+</html>

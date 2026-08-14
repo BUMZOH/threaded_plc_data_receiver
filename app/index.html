@@ -11,7 +11,10 @@
     <main>
         <header class="app-header">
             <div>
-                <h1>設備データ 受信アプリ</h1>
+                <div class="title-raw">
+                    <h1>設備データ 受信アプリ</h1>
+                    <span class="app-version">Version = 20260814-1</span>
+                </div>
 
                 <p class="plc-info">
                     PLC IPアドレス:
@@ -71,9 +74,16 @@
                     <strong id="chart-data">未受信</strong>
                 </div>
 
-                <div class="measured-at">
-                    <span class="chart-label">取得日時</span>
-                    <strong id="measured-at">-</strong>
+                <div class="chart-info">
+                    <div class="measured-at">
+                        <span class="chart-label">取得日時</span>
+                        <strong id="measured-at">-</strong>
+                    </div>
+
+                    <div class="judge-info">
+                        <span class="chart-label">判定</span>
+                        <strong id="judge-result">-</strong>
+                    </div>
                 </div>
             </div>
 

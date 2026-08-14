@@ -7,6 +7,7 @@ const saveModeSelect = document.getElementById("save-mode-select");
 const dataSelect = document.getElementById("data-select");
 const chartDataElement = document.getElementById("chart-data");
 
+const judgeResultElement = document.getElementById("judge-result");
 const measuredAtElement = document.getElementById("measured-at");
 const oldestButton = document.getElementById("oldest-button");
 const previousButton = document.getElementById("previous-button");
@@ -121,7 +122,12 @@ window.receiveData = function (payload) {
         dataChart.data.datasets[0].label = payload.data_name;
 
         chartDataElement.textContent = payload.data_name;
+        judgeResultElement.textContent = payload.judge ?? "-";
         measuredAtElement.textContent = payload.measured_at;
+
+        // 判定色変更用
+        judgeResultElement.classList.toggle("ok", payload.judge === "OK");
+        judgeResultElement.classList.toggle("ng", payload.judge === "NG");
 
         //--------------
         const startTime = performance.now();

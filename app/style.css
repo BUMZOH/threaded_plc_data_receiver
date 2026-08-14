@@ -16,6 +16,18 @@ main {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
+.title-raw {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.app-version {
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+}
+
 h1 {
     margin: 0;
     font-size: 24px;
@@ -234,6 +246,34 @@ button:disabled {
     font-size: 18px;
     font-weight: 600;
     color: #1f2937;
+}
+
+.chart-header > .chart-info {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 32px;
+    text-align: right;
+}
+
+.judge-info,
+.measured-at {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+#judge-result {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+#judge-result.ok {
+    color: #047857;
+}
+
+#judge-result.ng {
+    color: #b91c1c;
 }
 
 .measured-at {

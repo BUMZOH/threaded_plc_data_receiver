@@ -27,6 +27,9 @@ DATABASE_PATH = DATA_DIRECTORY / "measurement_data.db"
 
 SQLITE_LOCK = threading.Lock()
 
+# PythonからJavaScriptへPushするためのpywebviewウィンドウ。
+# js_apiの公開オブジェクトツリーには含めず、モジュールレベルで管理する。
+APP_WINDOW: webview.Window | None = None
 
 # -----------------------------------------------------------------------------
 # CLASSES
@@ -70,14 +73,12 @@ DATA_CONFIGS = tuple(
 # ---------------------------------------------------------
 class DataReceiver:
     """PLC要求監視と計測データ受信を管理する。"""
-
     # Python内部用クラスのため、pywebviewのJavaScript API公開対象から除外する。
-    # window内部まで解析されて再帰エラーになることを防ぐ。
+    # Executor / Event / Lockなどの内部オブジェクトを解析対象にしない。
     _serializable = False
 
     def __init__(self, plc_ip_address: str) -> None:
         self.plc_ip_address = plc_ip_address
-        self.window: webview.Window | None = None
         self.save_mode = "sqlite"
 
         # データ項目数分を並列実行できる固定サイズのスレッドプール。
@@ -134,46 +135,6 @@ class DataReceiver:
         """PLC監視の停止を要求する。"""
         self.stop_event.set()
 
-    def set_window(self, window: webview.Window) -> None:
-        """JavaScriptへ通知するためのpywebviewウィンドウを保持する。"""
-        self.window = window
-
-    def _push_status(self, message: str) -> None:
-        """通信状況をJavaScriptへPushする。"""
-        if self.window is None:
-            return
-
-        payload = json.dumps(
-            message,
-            ensure_ascii=False,
-        )
-
-        self.window.run_js(
-            f"window.receiveStatus({payload});"
-        )
-
-    def _push_data(
-            self,
-            config: DataConfig,
-            values: list[int],
-    ) -> None:
-        """受信した計測データをJavaScriptへPushする。"""
-        if self.window is None:
-            return
-
-        payload = json.dumps(
-            {
-                "data_name": config.name,
-                "measured_at": current_time(),
-                "values": values,
-            },
-            ensure_ascii=False,
-        )
-
-        self.window.run_js(
-            f"window.receiveData({payload});"
-        )
-
     def _check_request(self, config: DataConfig) -> None:
         """1台分の受信要求を確認し、立上り時に受信処理をスレッドプールへ投入する。"""
         response = kv_com.read_device_b(
@@ -211,7 +172,7 @@ class DataReceiver:
             self.request_latched[config.name] = True
             self.is_receiving[config.name] = True
 
-        self._push_status(
+        push_status(
             f"{config.name} データ受信開始"
         )
 
@@ -241,11 +202,6 @@ class DataReceiver:
                 DATA_POINT_COUNT,
             )
 
-            # 受信したデータをJavaScriptへPush
-            self._push_data(config, values)
-
-            save_path = save_data(config, values, self.save_mode)
-
             # 受信データを判定する
             judge_is_ok = judge_data(values)
 
@@ -255,6 +211,11 @@ class DataReceiver:
             else:
                 judge_device = config.judge_ng_device
                 judge_result = "NG"
+
+            # 受信したデータをJavaScriptへPush
+            push_data(config, values, judge_result)
+
+            save_path = save_data(config, values, self.save_mode, judge_result)
 
             response = kv_com.write_device_b(
                 self.plc_ip_address,
@@ -280,7 +241,7 @@ class DataReceiver:
                     f"device={config.completion_device}, response={response}"
                 )
 
-            self._push_status(
+            push_status(
                 f"{config.name} 受信完了 / 判定 = {judge_result}"
             )
 
@@ -469,18 +430,57 @@ class AppApi:
 # -----------------------------------------------------------------------------
 # FUNCTIONS
 # -----------------------------------------------------------------------------
+def push_status(message: str) -> None:
+    """通信状況をJavaScriptへPushする。"""
+    if APP_WINDOW is None:
+        return
+
+    payload = json.dumps(
+        message,
+        ensure_ascii=False,
+    )
+
+    APP_WINDOW.run_js(
+        f"window.receiveStatus({payload});"
+    )
+
+
+def push_data(
+        config: DataConfig,
+        values: list[int],
+        judge_result: str,
+) -> None:
+    """受信した計測データをJavaScriptへPushする。"""
+    if APP_WINDOW is None:
+        return
+
+    payload = json.dumps(
+        {
+            "data_name": config.name,
+            "measured_at": current_time(),
+            "judge": judge_result,
+            "values": values,
+        },
+        ensure_ascii=False,
+    )
+
+    APP_WINDOW.run_js(
+        f"window.receiveData({payload});"
+    )
+
+
 def judge_data(values: list[int]) -> bool:
     """受信データを判定し、OKならTrue、NGならFalseを返す。"""
     # 現状はOK(True)のみ返却する
     return True
 
-def save_data(config: DataConfig, values: list[int], save_mode: str) -> Path:
+def save_data(config: DataConfig, values: list[int], save_mode: str, judge_result: str) -> Path:
     """設定された保存形式に従って計測データを保存する。"""
     if save_mode == "csv":
         return save_csv(config, values)
 
     if save_mode == "sqlite":
-        return save_sqlite(config, values)
+        return save_sqlite(config, values, judge_result)
 
     raise ValueError(f"保存形式が不正です: {save_mode}")
 
@@ -496,6 +496,7 @@ def initialize_database() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 data_name TEXT NOT NULL,
                 measured_at TEXT NOT NULL,
+                judge TEXT NOT NULL CHECK (judge IN ('OK', 'NG')),
                 data BLOB NOT NULL
             )
             """
@@ -509,7 +510,7 @@ def initialize_database() -> None:
         )
 
 
-def save_sqlite(config: DataConfig, values: list[int]) -> Path:
+def save_sqlite(config: DataConfig, values: list[int], judge_result: str) -> Path:
     """受信した計測データをSQLiteへ保存する。"""
     if len(values) != DATA_POINT_COUNT:
         raise ValueError(
@@ -532,13 +533,15 @@ def save_sqlite(config: DataConfig, values: list[int]) -> Path:
                 INSERT INTO measurement_data (
                     data_name,
                     measured_at,
+                    judge,
                     data
                 )
-                VALUES (?, ?, ?)
+                VALUES (?, ?, ?, ?)
                 """,
                 (
                     config.name,
                     measured_at,
+                    judge_result,
                     binary_data,
                 ),
             )
@@ -555,7 +558,7 @@ def load_saved_data_sqlite(
 
     if direction == "oldest":
         sql = """
-            SELECT id, measured_at, data
+            SELECT id, measured_at, judge, data
             FROM measurement_data
             WHERE data_name = ?
             ORDER BY id ASC
@@ -565,7 +568,7 @@ def load_saved_data_sqlite(
 
     elif direction == "latest":
         sql = """
-            SELECT id, measured_at, data
+            SELECT id, measured_at, judge, data
             FROM measurement_data
             WHERE data_name = ?
             ORDER BY id DESC
@@ -575,7 +578,7 @@ def load_saved_data_sqlite(
 
     elif direction == "previous":
         sql = """
-            SELECT id, measured_at, data
+            SELECT id, measured_at, judge, data
             FROM measurement_data
             WHERE data_name = ?
               AND id < ?
@@ -586,7 +589,7 @@ def load_saved_data_sqlite(
 
     elif direction == "next":
         sql = """
-            SELECT id, measured_at, data
+            SELECT id, measured_at, judge, data
             FROM measurement_data
             WHERE data_name = ?
               AND id > ?
@@ -605,7 +608,7 @@ def load_saved_data_sqlite(
     if row is None:
         return None
 
-    record_id, measured_at, binary_data = row
+    record_id, measured_at, judge_result, binary_data = row
 
     # データ数 = BLOBのバイト数 ÷ 4（32ビット整数は4バイト）
     point_count = len(binary_data) // 4
@@ -619,6 +622,7 @@ def load_saved_data_sqlite(
         "id": record_id,
         "data_name": data_name,
         "measured_at": measured_at,
+        "judge": judge_result,
         "values": list(values)
     }
 
@@ -749,10 +753,12 @@ def current_time() -> str:
 
 
 def main() -> None:
+    global APP_WINDOW
+
     receiver = DataReceiver(PLC_IP_ADDRESS)
     api = AppApi(receiver)
 
-    window = webview.create_window(
+    APP_WINDOW = webview.create_window(
         title="設備データ 受信アプリ",
         url="index.html",
         js_api=api,
@@ -761,10 +767,8 @@ def main() -> None:
         resizable=True,
     )
 
-    receiver.set_window(window)
-
     # pywebviewのウィンドウが閉じられたら api.shutdown() を実行する
-    window.events.closed += api.shutdown
+    APP_WINDOW.events.closed += api.shutdown
 
     webview.start(debug=True)
 
