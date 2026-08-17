@@ -1,5 +1,5 @@
 {
-    "plc_ip_address": "192.168.8.1",
+    "plc_ip_address": "172.21.0.15",
     "poll_interval_seconds": 0.1,
     "data_point_count": 500,
 
@@ -23,7 +23,7 @@
             "output_directory": "data2"
         },
         {
-            "name": "measurement3",
+            "name": "Chuck_Air_Pressure",
             "request_device": "B1020",
             "completion_device": "B1028",
             "judge_ok_device": "B1029",
