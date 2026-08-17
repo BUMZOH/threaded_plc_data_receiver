@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Measurement Data Viewer</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <main>
+        <h1>Measurement Data Viewer</h1>
+
+        <section class="controls">
+            <label>
+                data_name
+                <select id="dataName"></select>
+            </label>
+
+            <label>
+                judge
+                <select id="judge">
+                    <option value="ALL">すべて</option>
+                    <option value="OK">OK</option>
+                    <option value="NG">NG</option>
+                </select>
+            </label>
+
+            <label>
+                開始日時
+                <input id="startAt" type="datetime-local" step="1">
+            </label>
+
+            <label>
+                終了日時
+                <input id="endAt" type="datetime-local" step="1">
+            </label>
+
+            <button id="loadButton">検索</button>
+        </section>
+
+        <section class="navigation">
+            <button id="previousButton">&lt;</button>
+            <span id="position">0 / 0 件</span>
+            <button id="nextButton">&gt;</button>
+        </section>
+
+        <section class="record-info">
+            <span id="recordId">id: -</span>
+            <span id="measuredAt">measured_at: -</span>
+            <span id="recordJudge">judge: -</span>
+        </section>
+
+        <section class="axis-controls">
+            <label>
+                X最小
+                <input id="xMin" type="number" placeholder="自動">
+            </label>
+
+            <label>
+                X最大
+                <input id="xMax" type="number" placeholder="自動">
+            </label>
+
+            <label>
+                Y最小
+                <input id="yMin" type="number" placeholder="自動">
+            </label>
+
+            <label>
+                Y最大
+                <input id="yMax" type="number" placeholder="自動">
+            </label>
+
+            <button id="applyAxisButton">軸を適用</button>
+            <button id="resetAxisButton">自動</button>
+        </section>
+
+        <p id="status">読み込み待ち</p>
+
+        <section class="chart-area">
+            <canvas id="waveChart"></canvas>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>

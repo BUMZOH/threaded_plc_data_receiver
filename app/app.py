@@ -22,7 +22,7 @@ from common_lib_mw import kv_com
 # -----------------------------------------------------------------------------
 BASE_DIRECTORY = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIRECTORY / "config.json"
-DATA_DIRECTORY = BASE_DIRECTORY / "data"
+DATA_DIRECTORY = BASE_DIRECTORY.parent / "data"
 DATABASE_PATH = DATA_DIRECTORY / "measurement_data.db"
 
 SQLITE_LOCK = threading.Lock()

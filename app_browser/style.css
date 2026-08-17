@@ -1,0 +1,58 @@
+body {
+    margin: 0;
+    font-family: sans-serif;
+}
+
+main {
+    padding: 16px;
+}
+
+h1 {
+    margin-top: 0;
+    font-size: 22px;
+}
+
+.controls,
+.axis-controls,
+.navigation,
+.record-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 12px;
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
+}
+
+select,
+input,
+button {
+    padding: 6px;
+    font: inherit;
+}
+
+.navigation {
+    align-items: center;
+}
+
+.navigation button {
+    min-width: 50px;
+}
+
+.record-info {
+    font-size: 14px;
+}
+
+#status {
+    margin: 8px 0;
+}
+
+.chart-area {
+    height: 600px;
+}
