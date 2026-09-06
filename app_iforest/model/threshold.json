@@ -1,0 +1,13 @@
+{
+    "threshold": -0.7502120496631642,
+    "threshold_percentile": 0.1,
+    "features": [
+        "peak_value",
+        "rms"
+    ],
+    "train_ratio": 0.8,
+    "train_count": 4189,
+    "validation_count": 1048,
+    "validation_false_positive_count": 1,
+    "validation_false_positive_rate": 0.09541984732824427
+}

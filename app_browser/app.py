@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import csv
 import sqlite3
 import struct
 from pathlib import Path
 
 import webview
 
+import data_analysis
+
 
 BASE_DIRECTORY = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIRECTORY.parent / "data" / "measurement_data.db"
 HTML_PATH = BASE_DIRECTORY / "index.html"
+OUTPUT_DIRECTORY = BASE_DIRECTORY / "output"
 
 
 class Api:
@@ -66,6 +70,8 @@ class Api:
             params.append(judge)
 
         sql += " ORDER BY measured_at, id"
+        sql += " LIMIT 10000"    # 最大取得件数
+
 
         with sqlite3.connect(DATABASE_PATH) as connection:
             rows = connection.execute(sql, params).fetchall()
@@ -95,6 +101,69 @@ class Api:
             "record_count": len(records),
         }
 
+    def get_analysis_functions(self) -> list[str]:
+        """利用可能な解析関数名の一覧を返す。"""
+
+        return data_analysis.get_analysis_function_names()
+
+    def analyze_data(self, function_name: str, values: list[int]) -> dict:
+        """指定された解析関数で波形データを解析する。"""
+        return data_analysis.analyze(function_name, values)
+
+    def append_analysis_csv(
+        self,
+        data_name: str,
+        function_name: str,
+        record_id: int,
+        measured_at: str,
+        judge: str,
+        features: list[dict],
+    ) -> None:
+        """解析結果をCSVファイルへ追記する。"""
+
+        OUTPUT_DIRECTORY.mkdir(exist_ok=True)
+
+        csv_path = OUTPUT_DIRECTORY / f"{data_name}({function_name}).csv"
+
+        file_exists = csv_path.exists()
+
+        feature_names = [
+            feature["name"]
+            for feature in features
+        ]
+
+        feature_values = [
+            feature["value"]
+            for feature in features
+        ]
+
+        # 特徴量が5個未満の場合は空欄で埋める
+        while len(feature_names) < 5:
+            feature_names.append("")
+
+        while len(feature_values) < 5:
+            feature_values.append("")
+
+        with csv_path.open("a", newline="", encoding="utf-8-sig") as file:
+            writer = csv.writer(file)
+
+            # 新規ファイルの場合だけヘッダーを書く
+            if not file_exists:
+                writer.writerow([
+                    "id",
+                    "measured_at",
+                    "judge",
+                    *feature_names,
+                ])
+
+            writer.writerow([
+                record_id,
+                measured_at,
+                judge,
+                *feature_values,
+            ])
+
+    
 
 def main() -> None:
     """アプリを起動する。"""

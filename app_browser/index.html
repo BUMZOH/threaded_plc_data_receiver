@@ -9,40 +9,38 @@
 </head>
 <body>
     <main>
-        <h1>Measurement Data Viewer</h1>
+        <header class="page-header">
+            <h1>Measurement Data Viewer</h1>
+        </header>
 
-        <section class="controls">
-            <label>
-                data_name
-                <select id="dataName"></select>
-            </label>
+        <section class="panel">
+            <div class="controls">
+                <label>
+                    data_name
+                    <select id="dataName"></select>
+                </label>
 
-            <label>
-                judge
-                <select id="judge">
-                    <option value="ALL">すべて</option>
-                    <option value="OK">OK</option>
-                    <option value="NG">NG</option>
-                </select>
-            </label>
+                <label>
+                    judge
+                    <select id="judge">
+                        <option value="ALL">すべて</option>
+                        <option value="OK">OK</option>
+                        <option value="NG">NG</option>
+                    </select>
+                </label>
 
-            <label>
-                開始日時
-                <input id="startAt" type="datetime-local" step="1">
-            </label>
+                <label>
+                    開始日時
+                    <input id="startAt" type="datetime-local" step="1">
+                </label>
 
-            <label>
-                終了日時
-                <input id="endAt" type="datetime-local" step="1">
-            </label>
+                <label>
+                    終了日時
+                    <input id="endAt" type="datetime-local" step="1">
+                </label>
 
-            <button id="loadButton">検索</button>
-        </section>
-
-        <section class="navigation">
-            <button id="previousButton">&lt;</button>
-            <span id="position">0 / 0 件</span>
-            <button id="nextButton">&gt;</button>
+                <button id="loadButton" class="primary-button">検索</button>
+            </div>
         </section>
 
         <section class="record-info">
@@ -51,35 +49,85 @@
             <span id="recordJudge">judge: -</span>
         </section>
 
-        <section class="axis-controls">
-            <label>
-                X最小
-                <input id="xMin" type="number" placeholder="自動">
-            </label>
+        <section class="panel graph-panel">
+            <p id="status">読み込み待ち</p>
 
-            <label>
-                X最大
-                <input id="xMax" type="number" placeholder="自動">
-            </label>
+            <div class="graph-layout">
 
-            <label>
-                Y最小
-                <input id="yMin" type="number" placeholder="自動">
-            </label>
+                <div class="chart-area">
+                    <canvas id="waveChart"></canvas>
+                </div>
 
-            <label>
-                Y最大
-                <input id="yMax" type="number" placeholder="自動">
-            </label>
+                <div class="axis-controls">
+                    <label>
+                        X最小
+                        <input id="xMin" type="number" placeholder="自動">
+                    </label>
 
-            <button id="applyAxisButton">軸を適用</button>
-            <button id="resetAxisButton">自動</button>
+                    <label>
+                        X最大
+                        <input id="xMax" type="number" placeholder="自動">
+                    </label>
+
+                    <label>
+                        Y最小
+                        <input id="yMin" type="number" placeholder="自動">
+                    </label>
+
+                    <label>
+                        Y最大
+                        <input id="yMax" type="number" placeholder="自動">
+                    </label>
+
+                    <button id="applyAxisButton">軸を適用</button>
+                    <button id="resetAxisButton">自動</button>
+                </div>
+
+            </div>
+
+            <div class="navigation">
+                <button id="firstButton">|&lt;</button>
+                <button id="previousButton">&lt;</button>
+
+                <input type="number" id="positionInput" min="1" value="1">
+                <span id="positionTotal">/ 0 件</span>
+
+                <button id="nextButton">&gt;</button>
+                <button id="lastButton">&gt;|</button>
+            </div>
         </section>
 
-        <p id="status">読み込み待ち</p>
+        <section class="panel analysis-section">
+            <div class="analysis-controls">
+                <label>
+                    解析関数
+                    <select id="analysisFunction">
+                        <option value="">なし</option>
+                    </select>
+                </label>
 
-        <section class="chart-area">
-            <canvas id="waveChart"></canvas>
+                <label class="csv-output-label">
+                    <input type="checkbox" id="csvOutput">
+                    特徴量CSV出力
+                </label>
+            </div>
+
+            <table id="analysisTable">
+                <tr>
+                    <td id="featureName1">-</td>
+                    <td id="featureName2">-</td>
+                    <td id="featureName3">-</td>
+                    <td id="featureName4">-</td>
+                    <td id="featureName5">-</td>
+                </tr>
+                <tr>
+                    <td id="featureValue1">-</td>
+                    <td id="featureValue2">-</td>
+                    <td id="featureValue3">-</td>
+                    <td id="featureValue4">-</td>
+                    <td id="featureValue5">-</td>
+                </tr>
+            </table>
         </section>
     </main>
 
