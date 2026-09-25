@@ -166,6 +166,8 @@ async function loadData() {
         return;
     }
 
+    setStatus("データ受信中...");
+
     const result = await window.pywebview.api.load_data(
         dataSource,
         dataName,
@@ -191,7 +193,7 @@ async function loadData() {
     if (dataSource === "local") {
         setStatus(`${records.length} 件見つかりました。(最大10000件・ローカル時)`);
     } else {
-        setStatus(`${records.length} 件見つかりました。`);
+        setStatus(`${records.length} 件見つかりました。(最大10000件・リモート時)`);
     }
 }
 

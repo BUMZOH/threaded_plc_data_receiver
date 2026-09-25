@@ -113,7 +113,7 @@ def get_measurements():
         params.append(judge)
 
     sql += " ORDER BY measured_at"
-    sql += " LIMIT 1000"
+    sql += " LIMIT 10000"
 
     cursor.execute(sql, params)
 
