@@ -190,8 +190,8 @@ def basic_statistics(values):
 ANALYSIS_FUNCTIONS = {
     "chuck_air_pressure_features": chuck_air_pressure_features,
     "spindle_motor_current_features": spindle_motor_current_features,
-    "basic_statistics": basic_statistics,
     "tool_servo_torque_features": tool_servo_torque_features,
+    "basic_statistics": basic_statistics,
 }
 
 

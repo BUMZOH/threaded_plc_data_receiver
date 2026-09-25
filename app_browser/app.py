@@ -110,60 +110,65 @@ class Api:
         """指定された解析関数で波形データを解析する。"""
         return data_analysis.analyze(function_name, values)
 
-    def append_analysis_csv(
+    def output_analysis_csv(
         self,
-        data_name: str,
         function_name: str,
-        record_id: int,
-        measured_at: str,
-        judge: str,
-        features: list[dict],
-    ) -> None:
-        """解析結果をCSVファイルへ追記する。"""
+        records: list[dict],
+    ) -> dict:
+        """検索結果全件の特徴量をCSVファイルへ出力する。"""
+
+        if not records:
+            raise ValueError("出力するデータがありません。")
 
         OUTPUT_DIRECTORY.mkdir(exist_ok=True)
 
+        data_name = records[0]["data_name"]
+
         csv_path = OUTPUT_DIRECTORY / f"{data_name}({function_name}).csv"
 
-        file_exists = csv_path.exists()
+        rows = []
+        feature_names = None
 
-        feature_names = [
-            feature["name"]
-            for feature in features
-        ]
+        for record in records:
+            result = data_analysis.analyze(function_name, record["values"])
+            features = result["features"]
 
-        feature_values = [
-            feature["value"]
-            for feature in features
-        ]
+            if feature_names is None:
+                feature_names = [feature["name"] for feature in features]
 
-        # 特徴量が5個未満の場合は空欄で埋める
-        while len(feature_names) < 5:
-            feature_names.append("")
+                while len(feature_names) < 5:
+                    feature_names.append("")
 
-        while len(feature_values) < 5:
-            feature_values.append("")
+            feature_values = [feature["value"] for feature in features]
 
-        with csv_path.open("a", newline="", encoding="utf-8-sig") as file:
-            writer = csv.writer(file)
+            while len(feature_values) < 5:
+                feature_values.append("")
 
-            # 新規ファイルの場合だけヘッダーを書く
-            if not file_exists:
-                writer.writerow([
-                    "id",
-                    "measured_at",
-                    "judge",
-                    *feature_names,
-                ])
-
-            writer.writerow([
-                record_id,
-                measured_at,
-                judge,
+            rows.append([
+                record["id"],
+                record["measured_at"],
+                record["judge"],
                 *feature_values,
             ])
 
-    
+
+        with csv_path.open("w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.writer(file)
+
+            writer.writerow([
+                "id",
+                "measured_at",
+                "judge",
+                *feature_names,
+            ])
+
+            writer.writerows(rows)
+
+        return {
+            "record_count": len(rows),
+            "csv_path": str(csv_path),
+        }        
+
 
 def main() -> None:
     """アプリを起動する。"""

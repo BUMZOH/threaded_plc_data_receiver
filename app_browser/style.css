@@ -169,14 +169,6 @@ button:disabled {
     min-width: 280px;
 }
 
-.csv-output-label {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
-    padding-bottom: 7px;
-}
-
 #analysisTable {
     width: 100%;
     border-collapse: collapse;

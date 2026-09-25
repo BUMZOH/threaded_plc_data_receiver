@@ -17,6 +17,7 @@ document.getElementById("applyAxisButton").addEventListener("click", applyAxis);
 document.getElementById("resetAxisButton").addEventListener("click", resetAxis);
 
 document.getElementById("analysisFunction").addEventListener("change", analyzeCurrentRecord);
+document.getElementById("csvOutputButton").addEventListener("click", outputAnalysisCsv);
 
 
 async function initialize() {
@@ -254,25 +255,35 @@ async function analyzeCurrentRecord() {
 
         showAnalysisResult(result);
 
-        const csvOutput = document.getElementById("csvOutput").checked;
-
-        if (csvOutput) {
-            await window.pywebview.api.append_analysis_csv(
-                record.data_name,
-                functionName,
-                record.id,
-                record.measured_at,
-                record.judge,
-                result.features,
-            );
-        }
-
     } catch (error) {
         clearAnalysisResult();
         setStatus(`解析エラー: ${error}`)
     }
+}
 
+async function outputAnalysisCsv() {
+    if (records.length === 0) {
+        setStatus("CSV出力するデータがありません。");
+        return;
+    }
 
+    const functionName = document.getElementById("analysisFunction").value;
+
+    if (!functionName) {
+        setStatus("解析関数を選択してください。");
+        return;
+    }
+
+    try {
+        const result = await window.pywebview.api.output_analysis_csv(
+            functionName,
+            records,
+        )
+
+        setStatus(`特徴量CSVを出力しました。${result.record_count} 件`);
+    } catch (error) {
+        setStatus(`CSV出力エラー: ${error}`);
+    }
 }
 
 function showAnalysisResult(result) {
