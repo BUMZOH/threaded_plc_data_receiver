@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import csv
 import sqlite3
 import struct
 from pathlib import Path
 
+import requests
 import webview
 
 import data_analysis
@@ -17,12 +19,135 @@ DATABASE_PATH = BASE_DIRECTORY.parent / "data" / "measurement_data.db"
 HTML_PATH = BASE_DIRECTORY / "index.html"
 OUTPUT_DIRECTORY = BASE_DIRECTORY / "output"
 
+SERVER_URL = "http://127.0.0.1:5000"
+
 
 class Api:
     """JavaScript側から呼び出すPython API。"""
 
-    def get_filter_options(self) -> dict:
+    def get_remote_data_names(self) -> list[str]:
+        """リモートサーバからdata_name一覧を取得する"""
+        response = requests.get(
+            f"{SERVER_URL}/data-names",
+            timeout=10,
+        )
+
+        response.raise_for_status()
+
+        return response.json()
+
+    def get_remote_date_range(self) -> dict:
+        """リモートサーバから測定日時の範囲を取得する。"""
+        response = requests.get(
+            f"{SERVER_URL}/date-range",
+            timeout=10,
+        )
+
+        response.raise_for_status()
+
+        return response.json()
+
+    def load_remote_data(
+        self,
+        data_name: str,
+        judge: str,
+        start_at: str,
+        end_at: str,
+    ) -> dict:
+        """リモートサーバから測定データを読み込む。"""
+        rows = self.get_remote_measurements(
+            data_name,
+            judge,
+            start_at,
+            end_at,
+        )
+
+        records = []
+
+        for row in rows:
+            binary_data = row["data"]
+
+            point_count = len(binary_data) // 4
+
+            values = struct.unpack(
+                f"<{point_count}i",
+                binary_data,
+            )
+
+            records.append(
+                {
+                    "id": row["id"],
+                    "data_name": row["data_name"],
+                    "measured_at": row["measured_at"],
+                    "judge": row["judge"],
+                    "values": list(values),
+                }
+            )
+
+        return {
+            "records": records,
+            "record_count": len(records)
+        }
+
+    def get_remote_measurements(
+            self,
+            data_name: str,
+            judge: str,
+            start_at: str,
+            end_at: str,
+    ) -> list[dict]:
+        """リモートサーバから測定データを取得する。"""
+        params = {
+            "data_name": data_name,
+            "start_at": start_at,
+            "end_at": end_at,
+        }
+
+        if judge != "ALL":
+            params["judge"] = judge
+
+        response = requests.get(
+            f"{SERVER_URL}/measurements",
+            params=params,
+            timeout=10,
+        )
+
+        response.raise_for_status()
+
+        rows = response.json()
+
+        for row in rows:
+            row["data"] = base64.b64decode(row["data"])
+
+        return rows
+
+    def get_filter_options(self, data_souce: str) -> dict:
         """data_name一覧と測定日時の範囲を返す。"""
+
+        if data_souce == "local":
+            return self.get_local_filter_options()
+
+        # -- 以下 data_source == "remote" の場合 ---
+        data_names = self.get_remote_data_names()
+        date_range = self.get_remote_date_range()
+
+        return {
+            "data_names": data_names,
+            "min_measured_at": date_range["start_at"],
+            "max_measured_at": date_range["end_at"],
+        }
+
+    def check_local_database(self):
+        """ローカルSQLiteの存在を確認する。"""
+        if not DATABASE_PATH.exists():
+            raise FileNotFoundError(
+                f"データベースが見つかりません: {DATABASE_PATH}"
+            )
+
+    def get_local_filter_options(self) -> dict:
+        """ローカルSQLiteからdata_name一覧と測定日時の範囲を取得する。"""
+        self.check_local_database()
+
         with sqlite3.connect(DATABASE_PATH) as connection:
             data_names = [
                 row[0]
@@ -50,12 +175,25 @@ class Api:
 
     def load_data(
         self,
+        data_source: str,
         data_name: str,
         judge: str,
         start_at: str,
         end_at: str,
     ) -> dict:
-        """指定条件に一致する測定データをSQLiteから読み込む。"""
+        """指定条件に一致する測定データを読み込む。"""
+
+        if data_source == "remote":
+            return self.load_remote_data(
+                data_name,
+                judge,
+                start_at,
+                end_at,
+            )
+
+        # --- 以下 data_source == "local" の場合 ---
+        self.check_local_database()
+
         sql = """
             SELECT id, data_name, measured_at, judge, data
             FROM measurement_data
@@ -172,11 +310,6 @@ class Api:
 
 def main() -> None:
     """アプリを起動する。"""
-    if not DATABASE_PATH.exists():
-        raise FileNotFoundError(
-            f"データベースが見つかりません: {DATABASE_PATH}"
-        )
-
     api = Api()
 
     webview.create_window(

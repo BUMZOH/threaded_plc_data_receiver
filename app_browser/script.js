@@ -19,10 +19,24 @@ document.getElementById("resetAxisButton").addEventListener("click", resetAxis);
 document.getElementById("analysisFunction").addEventListener("change", analyzeCurrentRecord);
 document.getElementById("csvOutputButton").addEventListener("click", outputAnalysisCsv);
 
+document.getElementById("dataSource").addEventListener("change", updateFilterOptions);
+
 
 async function initialize() {
-    const options = await window.pywebview.api.get_filter_options();
+    const dataSource = document.getElementById("dataSource").value;
     const analysisFunctions = await window.pywebview.api.get_analysis_functions();
+
+    let options;
+    try {
+        options = await window.pywebview.api.get_filter_options(dataSource);
+    } catch {
+        setStatus("ローカルデータベースが見つかりません。");
+        options = {
+            data_names: [],
+            min_measured_at: null,
+            max_measured_at: null,
+        };
+    }
 
     const dataNameSelect = document.getElementById("dataName");
     for (const dataName of options.data_names) {
@@ -48,6 +62,39 @@ async function initialize() {
 
     createChart();
     updateNavigation();
+}
+
+async function updateFilterOptions() {
+    const dataSource = document.getElementById("dataSource").value;
+
+    let options;
+
+    try {
+        options = await window.pywebview.api.get_filter_options(
+            dataSource,
+        );
+    } catch {
+        setStatus("データ取得元に接続できません。");
+        return;
+    }
+
+    const dataNameSelect = document.getElementById("dataName");
+
+    dataNameSelect.innerHTML = "";
+
+    for (const dataName of options.data_names) {
+        const option = document.createElement("option");
+        option.value = dataName;
+        option.textContent = dataName;
+        dataNameSelect.appendChild(option);
+    }
+
+    document.getElementById("startAt").value = 
+        sqliteDateTimeToInput(options.min_measured_at);
+    
+    document.getElementById("endAt").value =
+        sqliteDateTimeToInput(options.max_measured_at);
+
 }
 
 
@@ -99,6 +146,7 @@ function createChart() {
 
 
 async function loadData() {
+    const dataSource = document.getElementById("dataSource").value;
     const dataName = document.getElementById("dataName").value;
     const judge = document.getElementById("judge").value;
     const startAt = inputDateTimeToSqlite(
@@ -119,6 +167,7 @@ async function loadData() {
     }
 
     const result = await window.pywebview.api.load_data(
+        dataSource,
         dataName,
         judge,
         startAt,
@@ -138,7 +187,12 @@ async function loadData() {
 
     currentIndex = 0;
     showCurrentRecord();
-    setStatus(`${records.length} 件見つかりました。(最大10000件)`);
+    
+    if (dataSource === "local") {
+        setStatus(`${records.length} 件見つかりました。(最大10000件・ローカル時)`);
+    } else {
+        setStatus(`${records.length} 件見つかりました。`);
+    }
 }
 
 function showFirst() {
